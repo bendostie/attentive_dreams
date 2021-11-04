@@ -515,7 +515,7 @@ def dream(directory, args, largest_molecule_len, alphabet, model, train_time,
 if __name__ == '__main__':
     # import hyperparameter and training settings from yaml
     print('Start reading data file...')
-    settings=yaml.load(open("settings-res.yml","r"))
+    settings=yaml.load(open("settings.yml","r"))
     test = settings['test_model']
     plot = settings['plot_transform']
     n_heads = settings['n_heads']
@@ -558,7 +558,7 @@ if __name__ == '__main__':
         return new_string
     print(type(model_parameters))
 
-    directory = change_str('dream_results/residual_stacked_{}_{}_{}_{}/{}/{}' \
+    directory = change_str('dream_results/residual_{}_{}_{}_{}/{}/{}' \
                            .format(data_parameters_str,
                                    training_parameters_str,
                                    #n_layers,

@@ -44,8 +44,8 @@ class fc_model(nn.Module):
         self.n_heads = n_heads
 
         self.relational1 = Relational_Layer(self.node_size, self.node_size, self.n_nodes, self.n_heads)
-        self.relational2 = Relational_Layer(self.node_size, self.node_size, self.n_nodes, self.n_heads)
-        self.relational3 = Relational_Layer(self.node_size, self.node_size, self.n_nodes, self.n_heads)
+        #self.relational2 = Relational_Layer(self.node_size, self.node_size, self.n_nodes, self.n_heads)
+        #self.relational3 = Relational_Layer(self.node_size, self.node_size, self.n_nodes, self.n_heads)
         self.get_positional = Positional_Encoder(largest_molecule_len, device)
         
         
@@ -72,8 +72,8 @@ class fc_model(nn.Module):
         x = self.get_positional(x)
         #print("x", x)
         x = self.relational1(x)
-        x = self.relational2(x)
-        x = self.relational3(x)
+        #x = self.relational2(x)
+        #x = self.relational3(x)
         x = x.max(dim=1)[0]
         y = self.linear1(x)
         y = torch.nn.functional.elu(y)
@@ -558,7 +558,7 @@ if __name__ == '__main__':
         return new_string
     print(type(model_parameters))
 
-    directory = change_str('dream_results/residual_stacked_{}_{}_{}_{}/{}/{}' \
+    directory = change_str('dream_results/basic_{}_{}_{}_{}/{}/{}' \
                            .format(data_parameters_str,
                                    training_parameters_str,
                                    #n_layers,
