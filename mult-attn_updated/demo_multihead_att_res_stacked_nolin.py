@@ -6,6 +6,8 @@ The entire cycle - training and dreaming - is involved.
 
 import sys
 import os
+
+from utilities.relational import Positional_Encoder, Relational_Layer
 sys.path.append('datasets')
 import yaml
 import torch
@@ -20,39 +22,69 @@ from torch.utils.tensorboard import SummaryWriter
 from random import shuffle
 from torch import nn
 
+from einops import rearrange
+
 from utilities.utils import change_str, make_dir, use_gpu
 from utilities.mol_utils import edit_hot, lst_of_logP, multiple_hot_to_indices
 
 
 class fc_model(nn.Module):
 
-    def __init__(self, len_max_molec1Hot, num_of_neurons_layer1,
+    def __init__(self, device, len_alphabet, largest_molecule_len, n_heads, num_of_neurons_layer1,
                  num_of_neurons_layer2, num_of_neurons_layer3):
         """
         Fully Connected layers for the RNN.
         """
         super(fc_model, self).__init__()
 
-        # Reduce dimension up to second last layer of Encoder
-        self.encode_4d = nn.Sequential(
-            nn.Linear(len_max_molec1Hot, num_of_neurons_layer1),
-            nn.ReLU(),
-            nn.Linear(num_of_neurons_layer1, num_of_neurons_layer2),
-            nn.ReLU(),
-            nn.Linear(num_of_neurons_layer2, num_of_neurons_layer3),
-            nn.ReLU(),
-            nn.Linear(num_of_neurons_layer3, 1)
-        )
+
+        self.node_size = len_alphabet + 1
+        self.out_dim = 1
+        self.n_nodes = largest_molecule_len
+        self.n_heads = n_heads
+
+        self.relational1 = Relational_Layer(self.node_size, self.node_size, self.n_nodes, self.n_heads)
+        self.relational2 = Relational_Layer(self.node_size, self.node_size, self.n_nodes, self.n_heads)
+        self.relational3 = Relational_Layer(self.node_size, self.node_size, self.n_nodes, self.n_heads)
+        self.get_positional = Positional_Encoder(largest_molecule_len, device)
+        
+        
+        
+        #self.linear1 = nn.Linear(self.node_size, num_of_neurons_layer1)
+        #self.linear2 = nn.Linear(num_of_neurons_layer1, num_of_neurons_layer2)
+        #self.linear3 =  nn.Linear(num_of_neurons_layer2, num_of_neurons_layer3)
+        self.linear4 = nn.Linear(self.node_size, 1)
 
 
+        
+        
+
+        
+
+        
+        
+        
     def forward(self, x):
         """
         Pass through the model
-        """
-        # Go down to dim-4
-        h1 = self.encode_4d(x)
-
-        return h1
+        """ 
+        
+        x = self.get_positional(x)
+        #print("x", x)
+        x = self.relational1(x)
+        x = self.relational2(x)
+        x = self.relational3(x)
+        x = x.max(dim=1)[0]
+        #y = self.linear1(x)
+        #y = torch.nn.functional.elu(y)
+        #y = self.linear2(y)
+        #y = torch.relu(y)
+        #y = self.linear3(y)
+        #y = torch.relu(y)
+        y = self.linear4(x)
+        
+        
+        return y
 
 
 def train_model(parent_dir, directory, args, model,
@@ -65,17 +97,22 @@ def train_model(parent_dir, directory, args, model,
     writer = SummaryWriter(directory + '/summaries')
 
     # reshape for efficient parallelization
-    data_train=torch.tensor(data_train, dtype=torch.float, device=args.device)
-    data_test=torch.tensor(data_test, dtype=torch.float, device=args.device)
+    reshaped_data_train=torch.tensor(data_train, dtype=torch.float, device=args.device)
+    reshaped_data_test = data_test=torch.tensor(data_test, dtype=torch.float, device=args.device)
+    '''
+    print("data before reshape: {}".format(data_train.shape))
     reshaped_data_train = torch.reshape(data_train,
                                         (data_train.shape[0],
                                          data_train.shape[1]*data_train.shape[2]))
     reshaped_data_test = torch.reshape(data_test,
                                        (data_test.shape[0],
                                         data_test.shape[1]*data_test.shape[2]))
-
+    print("data after reshape: {}".format(reshaped_data_train.shape))
+    '''
     # add random noise to one-hot encoding
-    reshaped_data_test_edit = edit_hot(reshaped_data_test, upperbound)
+    reshaped_data_test_edit = edit_hot(data_test, upperbound)
+
+    
 
     data_train_prop=torch.tensor(data_train_prop,
                                  dtype=torch.float, device=args.device)
@@ -94,8 +131,10 @@ def train_model(parent_dir, directory, args, model,
         shuffle(x)
         reshaped_data_train  = reshaped_data_train[x]
         data_train_prop = data_train_prop[x]
+        #print("data before edit_hot: {}".format(reshaped_data_train.shape))
         reshaped_data_train_edit = edit_hot(reshaped_data_train,
                                             upper_bound=upperbound)
+        #print("data after edit_hot: {}".format(reshaped_data_train_edit.shape))
 
         for batch_iteration in range(int(len(reshaped_data_train_edit)/batch_size)):
 
@@ -103,13 +142,16 @@ def train_model(parent_dir, directory, args, model,
                 batch_iteration * batch_size, (batch_iteration + 1) * batch_size
 
             # slice data into batches
+            
             curr_mol=reshaped_data_train_edit[current_smiles_start : \
                                               current_smiles_stop]
             curr_prop=data_train_prop[current_smiles_start : \
                                       current_smiles_stop]
 
             # feedforward step
+            #print("curr molecule: {}".format(curr_mol.shape))
             calc_properties = model(curr_mol)
+            
             calc_properties=torch.reshape(calc_properties,[len(calc_properties)])
 
             # mean-squared error between calculated property and modelled property
@@ -180,28 +222,28 @@ def train_model(parent_dir, directory, args, model,
                 break
 
 
-def load_model(file_name, args, len_max_molec1Hot, model_parameters):
+def load_model(file_name, args, len_alphabet, largest_molecule_len, n_heads, model_parameters):
     """Load existing model state dict from file"""
 
-    model = fc_model(len_max_molec1Hot, **model_parameters).to(device=args.device)
+    model = fc_model(args.device, len_alphabet, largest_molecule_len, n_heads, **model_parameters).to(device=args.device)
     model.load_state_dict(torch.load(file_name))
     model.eval()
     return model
 
 
-def train(directory, args, model_parameters, len_max_molec1Hot, upperbound,
+def train(directory, args, n_heads, model_parameters, len_alphabet, largest_molecule_len, upperbound,
           data_train, prop_vals_train, data_test, prop_vals_test, lr_train,
           num_epochs, batch_size):
     name = change_str(directory)+'/model.pt'
 
     if os.path.exists(name):
-        model = load_model(name, args, len_max_molec1Hot, model_parameters)
+        model = load_model(name, args, len_alphabet, largest_molecule_len, n_heads, model_parameters)
         print('Testing model...')
         test_model(directory, args, model,
                    data_train, prop_vals_train, upperbound)
     else:
         print('No models saved in file with current settings.')
-        model = fc_model(len_max_molec1Hot, **model_parameters).to(device=args.device)
+        model = fc_model(args.device, len_alphabet, largest_molecule_len, n_heads, **model_parameters).to(device=args.device)
         model.train()
 
         print('len(data_train): ',len(data_train))
@@ -211,7 +253,7 @@ def train(directory, args, model_parameters, len_max_molec1Hot, upperbound,
                     data_train, prop_vals_train, data_test, prop_vals_test,
                     lr_train, num_epochs, batch_size)
 
-        model = fc_model(len_max_molec1Hot, **model_parameters).to(device=args.device)
+        model = fc_model(args.device, len_alphabet, largest_molecule_len, n_heads, **model_parameters).to(device=args.device)
         model.load_state_dict(torch.load(name))
         model.eval()
         print('Testing model...')
@@ -229,8 +271,8 @@ def test_model(directory, args, model, data, data_prop, upperbound):
     computed_data_prop = torch.tensor(data_prop, device=args.device)
 
     # reshape for efficient parallelization
-    test_data = test_data.reshape(test_data.shape[0],
-                                  test_data.shape[1] * test_data.shape[2])
+    #test_data = test_data.reshape(test_data.shape[0],
+    #                              test_data.shape[1] * test_data.shape[2])
 
     # add random noise to one-hot encoding with specified upperbound
     test_data_edit = edit_hot(test_data, upperbound)
@@ -244,7 +286,7 @@ def test_model(directory, args, model, data, data_prop, upperbound):
                                        directory)
 
 
-def dream_model(model, prop, largest_molecule_len, alphabet, upperbound,
+def dream_model(model, prop, largest_molecule_len,  alphabet, upperbound,
                 data_train, lr, batch_size, num_epochs, display=True):
     """
     Trains in the inverse of the model with a single molecular input.
@@ -258,8 +300,8 @@ def dream_model(model, prop, largest_molecule_len, alphabet, upperbound,
     loss_prediction=[]
 
     # reshape for efficient parallelization
-    data_train = data_train.reshape(data_train.shape[0],
-                                    data_train.shape[1] * data_train.shape[2])
+    #data_train = data_train.reshape(data_train.shape[0],
+    #                                data_train.shape[1] * data_train.shape[2])
 
     # add random noise to one-hot encoding
     data_train_edit = edit_hot(data_train, upper_bound=upperbound)
@@ -473,9 +515,10 @@ def dream(directory, args, largest_molecule_len, alphabet, model, train_time,
 if __name__ == '__main__':
     # import hyperparameter and training settings from yaml
     print('Start reading data file...')
-    settings=yaml.load(open("settings_long_run.yml","r"))
+    settings=yaml.load(open("settings.yml","r"))
     test = settings['test_model']
     plot = settings['plot_transform']
+    n_heads = settings['n_heads']
     mols = settings['mols']
     file_name = settings['data_preprocess']['smiles_file']
     lr_train=settings['lr_train']
@@ -485,6 +528,7 @@ if __name__ == '__main__':
     batch_size=settings['training']['batch_size']
     num_epochs = settings['training']['num_epochs']
     model_parameters = settings['model']
+    #print("model params {}".format(model_parameters))
     dreaming_parameters = settings['dreaming']
     dreaming_parameters_str = '{}_{}'.format(dreaming_parameters['batch_size'],
                                              dreaming_parameters['num_epochs'])
@@ -507,9 +551,19 @@ if __name__ == '__main__':
     if num_dream > num_train:
         num_mol = num_dream
 
-    directory = change_str('dream_results/{}_{}/{}/{}' \
+    def str_model_args(args):
+        new_string = ""
+        for (k) in args:
+            new_string += ", " + str(args.get(k))
+        return new_string
+    print(type(model_parameters))
+
+    directory = change_str('dream_results/residual_stacked_{}_{}_{}_{}/{}/{}' \
                            .format(data_parameters_str,
                                    training_parameters_str,
+                                   #n_layers,
+                                   str_model_args(model_parameters),
+                                   n_heads,
                                    upperbound_tr,
                                    lr_train))
     make_dir(directory)
@@ -517,7 +571,7 @@ if __name__ == '__main__':
     args = use_gpu()
 
     # data-preprocessing
-    data, prop_vals, alphabet, len_max_molec1Hot, largest_molecule_len = \
+    data, prop_vals, alphabet, len_alphabet, largest_molecule_len = \
         data_loader.preprocess(num_mol, file_name)
 
     # add stochasticity to data
@@ -533,7 +587,7 @@ if __name__ == '__main__':
         = data_loader.split_train_test(data, prop_vals, num_train, 0.85)
 
     t=time.process_time()
-    model = train(directory, args, model_parameters, len_max_molec1Hot,
+    model = train(directory, args, n_heads, model_parameters, len_alphabet, largest_molecule_len,
                   upperbound_tr, data_train, prop_vals_train, data_test,
                   prop_vals_test, lr_train, num_epochs, batch_size)
     train_time = time.process_time()-t
