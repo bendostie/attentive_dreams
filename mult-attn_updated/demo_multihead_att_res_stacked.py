@@ -6,6 +6,8 @@ The entire cycle - training and dreaming - is involved.
 
 import sys
 import os
+
+from utilities.relational import Positional_Encoder, Relational_Layer
 sys.path.append('datasets')
 import yaml
 import torch
@@ -28,7 +30,7 @@ from utilities.mol_utils import edit_hot, lst_of_logP, multiple_hot_to_indices
 
 class fc_model(nn.Module):
 
-    def __init__(self, len_max_molec1Hot, n_heads, num_of_neurons_layer1,
+    def __init__(self, len_alphabet, largest_molecule_len, n_heads, num_of_neurons_layer1,
                  num_of_neurons_layer2, num_of_neurons_layer3):
         """
         Fully Connected layers for the RNN.
@@ -36,71 +38,26 @@ class fc_model(nn.Module):
         super(fc_model, self).__init__()
 
 
-        self.node_size = 19#C
-
+        self.node_size = len_alphabet + 1
         self.out_dim = 1
-        self.N = 21 #D
+        self.n_nodes = largest_molecule_len
         self.n_heads = n_heads
 
-        # Reduce dimension up to second last layer of Encoder
+        self.relational1 = Relational_Layer(self.node_size, self.node_size, self.n_nodes, self.n_heads)
+        self.relational2 = Relational_Layer(self.node_size, self.node_size, self.n_nodes, self.n_heads)
+        self.relational3 = Relational_Layer(self.node_size, self.node_size, self.n_nodes, self.n_heads)
+        self.get_positional = Positional_Encoder(largest_molecule_len,)
         
-        #self.linear1 = nn.Linear(len_max_molec1Hot, num_of_neurons_layer1)
+        
+        #self.linear1 = nn.Linear(len_alphabet, num_of_neurons_layer1)
         #self.linear1 = nn.Linear(399, num_of_neurons_layer1)
         #self.linear2 = nn.Linear(num_of_neurons_layer1, num_of_neurons_layer2)
         #self.linear3 =  nn.Linear(num_of_neurons_layer2, num_of_neurons_layer3)
         #self.linear4 = nn.Linear(160, 150)
-    #first attention layer
-        self.proj_shape = (19, self.n_heads * self.node_size) #E
-        self.k_proj1 = nn.Linear(*self.proj_shape)
-        self.q_proj1 = nn.Linear(*self.proj_shape)
-        self.v_proj1 = nn.Linear(*self.proj_shape)
-        
-        self.k_lin1 = nn.Linear(self.node_size,self.N) #B
-        self.q_lin1 = nn.Linear(self.node_size,self.N)
-        self.a_lin1 = nn.Linear(self.N,self.N)
 
-        self.node_shape = (self.n_heads, self.N,self.node_size)
-        self.k_norm1 = nn.LayerNorm(self.node_shape, elementwise_affine=True) #F
-        self.q_norm1 = nn.LayerNorm(self.node_shape, elementwise_affine=True)
-        self.v_norm1 = nn.LayerNorm(self.node_shape, elementwise_affine=True)
-    #second attetniion layer
-        self.k_proj2 = nn.Linear(*self.proj_shape)
-        self.q_proj2 = nn.Linear(*self.proj_shape)
-        self.v_proj2 = nn.Linear(*self.proj_shape)
-        
-        self.k_lin2 = nn.Linear(self.node_size,self.N) #B
-        self.q_lin2 = nn.Linear(self.node_size,self.N)
-        self.a_lin2 = nn.Linear(self.N,self.N)
-
-        self.node_shape = (self.n_heads, self.N,self.node_size)
-        self.k_norm2 = nn.LayerNorm(self.node_shape, elementwise_affine=True) #F
-        self.q_norm2 = nn.LayerNorm(self.node_shape, elementwise_affine=True)
-        self.v_norm2 = nn.LayerNorm(self.node_shape, elementwise_affine=True)
-    #third attention layer
-        self.k_proj3 = nn.Linear(*self.proj_shape)
-        self.q_proj3 = nn.Linear(*self.proj_shape)
-        self.v_proj3 = nn.Linear(*self.proj_shape)
-        
-        self.k_lin3 = nn.Linear(self.node_size,self.N) #B
-        self.q_lin3 = nn.Linear(self.node_size,self.N)
-        self.a_lin3 = nn.Linear(self.N,self.N)
-
-        self.node_shape = (self.n_heads, self.N,self.node_size)
-        self.k_norm3 = nn.LayerNorm(self.node_shape, elementwise_affine=True) #F
-        self.q_norm3 = nn.LayerNorm(self.node_shape, elementwise_affine=True)
-        self.v_norm3 = nn.LayerNorm(self.node_shape, elementwise_affine=True)
-    #linear layers 
-        self.linear1 = nn.Linear(self.n_heads * self.node_size, self.node_size)
-        self.norm1 = nn.LayerNorm([self.N,self.node_size], elementwise_affine=False)
-
-        self.linear2 = nn.Linear(self.n_heads * self.node_size, self.node_size)
-        self.norm2 = nn.LayerNorm([self.N,self.node_size], elementwise_affine=False)
-
-        self.linear3 = nn.Linear(self.n_heads * self.node_size, self.node_size)
-        self.norm3 = nn.LayerNorm([self.N,self.node_size], elementwise_affine=False)
 
         self.linear4 = nn.Linear(self.node_size, self.out_dim)
-        #self.linear7 = nn.Linear(self.out_dim, 1)
+        
 
         
 
@@ -111,16 +68,17 @@ class fc_model(nn.Module):
         """
         Pass through the model
         """ 
-        x = x.unsqueeze(1)
+        
+        x = self.get_positional(x)
+        x = self.relational1(x)
+        x = self.relational2(x)
+        x = self.relational3(x)
 
-        #positional encoding (should do outside forward but oh well)
-        B, _, H, _ = x.shape
-        pos = torch.arange(H).float() / H
-        pos = pos.unsqueeze(dim=1)
-        pos = pos.repeat(B, 1, 1, 1)
+        
+        
 
-        #add and remove a dim for dimensional inference and add positional encoding
-        x = torch.cat([x.unsqueeze(4), pos.unsqueeze(4)], dim=3).squeeze(dim=4).squeeze(dim=1) #.reshape(-1, 1, 399) #reshape removed because data is already 1d
+        
+        
      
         
         #print(x.shape)
@@ -135,84 +93,14 @@ class fc_model(nn.Module):
         #print("x shape: {}".format(x.shape))
         #print("x shape: {}".format(self.k_proj(x).shape))
 
-        K = rearrange(self.k_proj1(x), "b n (head d) -> b head n d", head=self.n_heads)
-        #print("k shape {}".format(K.shape))
-        K = self.k_norm1(K) 
-        #print("k {}".format(K.shape))
-        Q = rearrange(self.q_proj1(x), "b n (head d) -> b head n d", head=self.n_heads)
-        Q = self.q_norm1(Q) 
-        #print("q {}".format(Q.shape))
-        V = rearrange(self.v_proj1(x), "b n (head d) -> b head n d", head=self.n_heads)
-        V = self.v_norm1(V) 
-        A = torch.nn.functional.elu(self.q_lin1(Q) + self.k_lin1(K)) #D
-        A = self.a_lin1(A)
-        A = torch.nn.functional.softmax(A,dim=3) 
-        with torch.no_grad():
-            self.att_map = A.clone() #E
-        E = torch.einsum('bhfc,bhcd->bhfd',A,V) #F
-
-        E = rearrange(E, 'b head n d -> b n (head d)')
-        #print("e {}".format(E.shape))
-        E = self.linear1(E)
-        E = torch.relu(E)
-        E = self.norm1(E)
-        E = E + x
-        #print("e2 {}".format(E.shape))
-        x = E
-
-        K = rearrange(self.k_proj2(x), "b n (head d) -> b head n d", head=self.n_heads)
-        #print("k shape {}".format(K.shape))
-        K = self.k_norm2(K) 
-        #print("k {}".format(K.shape))
-        Q = rearrange(self.q_proj2(x), "b n (head d) -> b head n d", head=self.n_heads)
-        Q = self.q_norm2(Q) 
-        #print("q {}".format(Q.shape))
-        V = rearrange(self.v_proj2(x), "b n (head d) -> b head n d", head=self.n_heads)
-        V = self.v_norm2(V) 
-        A = torch.nn.functional.elu(self.q_lin2(Q) + self.k_lin2(K)) #D
-        A = self.a_lin2(A)
-        A = torch.nn.functional.softmax(A,dim=3) 
-        with torch.no_grad():
-            self.att_map = A.clone() #E
-        E = torch.einsum('bhfc,bhcd->bhfd',A,V) #F
-
-        E = rearrange(E, 'b head n d -> b n (head d)')
-        #print("e {}".format(E.shape))
-        E = self.linear2(E)
-        E = torch.relu(E)
-        E = self.norm2(E)
-        E = E + x
-        x = E
-
-        K = rearrange(self.k_proj3(x), "b n (head d) -> b head n d", head=self.n_heads)
-        #print("k shape {}".format(K.shape))
-        K = self.k_norm3(K) 
-        #print("k {}".format(K.shape))
-        Q = rearrange(self.q_proj3(x), "b n (head d) -> b head n d", head=self.n_heads)
-        Q = self.q_norm3(Q) 
-        #print("q {}".format(Q.shape))
-        V = rearrange(self.v_proj3(x), "b n (head d) -> b head n d", head=self.n_heads)
-        V = self.v_norm3(V) 
-        A = torch.nn.functional.elu(self.q_lin3(Q) + self.k_lin3(K)) #D
-        A = self.a_lin3(A)
-        A = torch.nn.functional.softmax(A,dim=3) 
-        with torch.no_grad():
-            self.att_map = A.clone() #E
-        E = torch.einsum('bhfc,bhcd->bhfd',A,V) #F
-
-        E = rearrange(E, 'b head n d -> b n (head d)')
-        #print("e {}".format(E.shape))
-        E = self.linear3(E)
-        E = torch.relu(E)
-        E = self.norm3(E)
-        E = E + x
+        
 
 
-        E = E.max(dim=1)[0]
+        x = x.max(dim=1)[0]
         #print("e3 {}".format(E.shape))
-        y = self.linear4(E)
-        y = torch.nn.functional.elu(y)
-        return y
+        x = self.linear4(x)
+        x = torch.nn.functional.elu(x)
+        return x
 
 
 def train_model(parent_dir, directory, args, model,
@@ -350,28 +238,28 @@ def train_model(parent_dir, directory, args, model,
                 break
 
 
-def load_model(file_name, args, len_max_molec1Hot, n_heads, model_parameters):
+def load_model(file_name, args, len_alphabet, largest_molecule_len, n_heads, model_parameters):
     """Load existing model state dict from file"""
 
-    model = fc_model(len_max_molec1Hot, n_heads, **model_parameters).to(device=args.device)
+    model = fc_model(len_alphabet, largest_molecule_len, n_heads, **model_parameters).to(device=args.device)
     model.load_state_dict(torch.load(file_name))
     model.eval()
     return model
 
 
-def train(directory, args, n_heads, model_parameters, len_max_molec1Hot, upperbound,
+def train(directory, args, n_heads, model_parameters, len_alphabet, largest_molecule_len, upperbound,
           data_train, prop_vals_train, data_test, prop_vals_test, lr_train,
           num_epochs, batch_size):
     name = change_str(directory)+'/model.pt'
 
     if os.path.exists(name):
-        model = load_model(name, args, len_max_molec1Hot, n_heads, model_parameters)
+        model = load_model(name, args, len_alphabet, largest_molecule_len, n_heads, model_parameters)
         print('Testing model...')
         test_model(directory, args, model,
                    data_train, prop_vals_train, upperbound)
     else:
         print('No models saved in file with current settings.')
-        model = fc_model(len_max_molec1Hot, n_heads, **model_parameters).to(device=args.device)
+        model = fc_model(len_alphabet, largest_molecule_len, n_heads, **model_parameters).to(device=args.device)
         model.train()
 
         print('len(data_train): ',len(data_train))
@@ -381,7 +269,7 @@ def train(directory, args, n_heads, model_parameters, len_max_molec1Hot, upperbo
                     data_train, prop_vals_train, data_test, prop_vals_test,
                     lr_train, num_epochs, batch_size)
 
-        model = fc_model(len_max_molec1Hot, n_heads, **model_parameters).to(device=args.device)
+        model = fc_model(len_alphabet, largest_molecule_len, n_heads, **model_parameters).to(device=args.device)
         model.load_state_dict(torch.load(name))
         model.eval()
         print('Testing model...')
@@ -414,7 +302,7 @@ def test_model(directory, args, model, data, data_prop, upperbound):
                                        directory)
 
 
-def dream_model(model, prop, largest_molecule_len, alphabet, upperbound,
+def dream_model(model, prop, largest_molecule_len,  alphabet, upperbound,
                 data_train, lr, batch_size, num_epochs, display=True):
     """
     Trains in the inverse of the model with a single molecular input.
@@ -699,7 +587,7 @@ if __name__ == '__main__':
     args = use_gpu()
 
     # data-preprocessing
-    data, prop_vals, alphabet, len_max_molec1Hot, largest_molecule_len = \
+    data, prop_vals, alphabet, len_alphabet, largest_molecule_len = \
         data_loader.preprocess(num_mol, file_name)
 
     # add stochasticity to data
@@ -715,7 +603,7 @@ if __name__ == '__main__':
         = data_loader.split_train_test(data, prop_vals, num_train, 0.85)
 
     t=time.process_time()
-    model = train(directory, args, n_heads, model_parameters, len_max_molec1Hot,
+    model = train(directory, args, n_heads, model_parameters, len_alphabet, largest_molecule_len,
                   upperbound_tr, data_train, prop_vals_train, data_test,
                   prop_vals_test, lr_train, num_epochs, batch_size)
     train_time = time.process_time()-t

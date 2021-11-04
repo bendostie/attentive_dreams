@@ -1,44 +1,47 @@
-import sys
-import os
-sys.path.append('datasets')
-import yaml
+
 import torch
-import time
-import numpy as np
-
-from utilities import data_loader
-from utilities import plot_utils
-from utilities import mol_utils
-
-from torch.utils.tensorboard import SummaryWriter
-from random import shuffle
 from torch import nn
-
 from einops import rearrange
 
-class Relational:
-    def __init__(self, input_size, output_size, node_size, n_nodes, n_heads ) -> None:
-        self.node_size = 19#C
 
+class Positional_Encoder(nn.Module):
+    def __init__(self, length) -> None:
+        super(Positional_Encoder, self).__init__()
+        pos = torch.arange(length).float() / length
+        self.pos = pos.unsqueeze(dim=1)
         
-        self.N = 21 #D
+    def forward(self, x):
+        batch, _, _ = x.shape
+        #add and remove a dim for dimensional inference and add positional encoding
+        x = torch.cat([x.unsqueeze(3), self.pos.repeat(batch, 1, 1).unsqueeze(3)], dim=2).squeeze(dim=3)
+        return x
+
+
+
+class Relational_Layer(nn.Module):
+    def __init__(self, input_size, node_size, n_nodes, n_heads, residual = True ) -> None:
+        super(Relational_Layer, self).__init__()
         self.n_heads = n_heads
-
-
-
-        self.proj_shape = (19, self.n_heads * self.node_size) #E
+        self.residual = residual
+        self.proj_shape = (input_size, self.n_heads * node_size)
         self.k_proj = nn.Linear(*self.proj_shape)
         self.q_proj = nn.Linear(*self.proj_shape)
         self.v_proj = nn.Linear(*self.proj_shape)
         
-        self.k_lin = nn.Linear(self.node_size,self.N) #B
-        self.q_lin = nn.Linear(self.node_size,self.N)
-        self.a_lin = nn.Linear(self.N,self.N)
+        self.k_lin = nn.Linear(node_size, n_nodes)
+        self.q_lin = nn.Linear(node_size, n_nodes)
+        self.a_lin = nn.Linear(n_nodes, n_nodes)
 
-        self.node_shape = (self.n_heads, self.N,self.node_size)
-        self.k_norm = nn.LayerNorm(self.node_shape, elementwise_affine=True) #F
+        self.node_shape = (self.n_heads, n_nodes, node_size)
+        
+        self.k_norm = nn.LayerNorm(self.node_shape, elementwise_affine=True)
         self.q_norm = nn.LayerNorm(self.node_shape, elementwise_affine=True)
         self.v_norm = nn.LayerNorm(self.node_shape, elementwise_affine=True)
+
+        self.linear = nn.Linear(self.n_heads * node_size, node_size)
+        self.norm = nn.LayerNorm([n_nodes, node_size], elementwise_affine=False)
+    
+
     def forward(self, x):
         K = rearrange(self.k_proj(x), "b n (head d) -> b head n d", head=self.n_heads)
         #print("k shape {}".format(K.shape))
@@ -61,6 +64,7 @@ class Relational:
         E = self.linear(E)
         E = torch.relu(E)
         E = self.norm(E)
-        E = E + x
+        if self.residual:
+            E = E + x
         #print("e2 {}".format(E.shape))
-        x = E
+        return E

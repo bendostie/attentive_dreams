@@ -192,7 +192,7 @@ def preprocess(num_mol, file_name):
           len_max_molec, ' letters.')
     
 
-    return data, prop_vals, alphabet, len_max_molec1Hot, largest_molecule_len
+    return data, prop_vals, alphabet, len_alphabet, largest_molecule_len
 
 
 def split_train_test(data, prop_vals, num_mol, frac_train):
