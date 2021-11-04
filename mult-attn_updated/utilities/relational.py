@@ -5,10 +5,10 @@ from einops import rearrange
 
 
 class Positional_Encoder(nn.Module):
-    def __init__(self, length) -> None:
+    def __init__(self, length, device) -> None:
         super(Positional_Encoder, self).__init__()
         pos = torch.arange(length).float() / length
-        self.pos = pos.unsqueeze(dim=1)
+        self.pos = pos.unsqueeze(dim=1).to(device=device)
         
     def forward(self, x):
         batch, _, _ = x.shape

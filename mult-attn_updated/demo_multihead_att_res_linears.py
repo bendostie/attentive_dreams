@@ -6,6 +6,8 @@ The entire cycle - training and dreaming - is involved.
 
 import sys
 import os
+
+from utilities.relational import Positional_Encoder, Relational_Layer
 sys.path.append('datasets')
 import yaml
 import torch
@@ -16,6 +18,7 @@ from utilities import data_loader
 from utilities import plot_utils
 from utilities import mol_utils
 
+from torch.utils.tensorboard import SummaryWriter
 from random import shuffle
 from torch import nn
 
@@ -27,7 +30,7 @@ from utilities.mol_utils import edit_hot, lst_of_logP, multiple_hot_to_indices
 
 class fc_model(nn.Module):
 
-    def __init__(self, len_max_molec1Hot, n_heads, num_of_neurons_layer1,
+    def __init__(self, device, len_alphabet, largest_molecule_len, n_heads, num_of_neurons_layer1,
                  num_of_neurons_layer2, num_of_neurons_layer3):
         """
         Fully Connected layers for the RNN.
@@ -35,38 +38,26 @@ class fc_model(nn.Module):
         super(fc_model, self).__init__()
 
 
-        self.node_size = 21#C
-
+        self.node_size = len_alphabet + 1
         self.out_dim = 1
-        self.N = int(1) #D
+        self.n_nodes = largest_molecule_len
         self.n_heads = n_heads
 
-        # Reduce dimension up to second last layer of Encoder
+        self.relational1 = Relational_Layer(self.node_size, self.node_size, self.n_nodes, self.n_heads)
+        #self.relational2 = Relational_Layer(self.node_size, self.node_size, self.n_nodes, self.n_heads)
+        #self.relational3 = Relational_Layer(self.node_size, self.node_size, self.n_nodes, self.n_heads)
+        self.get_positional = Positional_Encoder(largest_molecule_len, device)
         
-        #self.linear1 = nn.Linear(len_max_molec1Hot, num_of_neurons_layer1)
-        self.linear1 = nn.Linear(399, num_of_neurons_layer1)
+        
+        
+        self.linear1 = nn.Linear(self.node_size, num_of_neurons_layer1)
         self.linear2 = nn.Linear(num_of_neurons_layer1, num_of_neurons_layer2)
         self.linear3 =  nn.Linear(num_of_neurons_layer2, num_of_neurons_layer3)
-        #self.linear4 = nn.Linear(160, 150)
-        
-        self.proj_shape = (num_of_neurons_layer3, self.n_heads * self.node_size) #E
-        self.k_proj = nn.Linear(*self.proj_shape)
-        self.q_proj = nn.Linear(*self.proj_shape)
-        self.v_proj = nn.Linear(*self.proj_shape)
-        
-        self.k_lin = nn.Linear(self.node_size,self.N) #B
-        self.q_lin = nn.Linear(self.node_size,self.N)
-        self.a_lin = nn.Linear(self.N,self.N)
+        self.linear4 = nn.Linear(num_of_neurons_layer3, 1)
 
-        self.node_shape = (self.n_heads, self.N,self.node_size)
-        self.k_norm = nn.LayerNorm(self.node_shape, elementwise_affine=True) #F
-        self.q_norm = nn.LayerNorm(self.node_shape, elementwise_affine=True)
-        self.v_norm = nn.LayerNorm(self.node_shape, elementwise_affine=True)
+
         
-        self.linear5 = nn.Linear(self.n_heads * self.node_size, self.node_size)
-        self.norm1 = nn.LayerNorm([self.N,self.node_size], elementwise_affine=False)
-        self.linear6 = nn.Linear(self.node_size, self.out_dim)
-        #self.linear7 = nn.Linear(self.out_dim, 1)
+        
 
         
 
@@ -77,78 +68,22 @@ class fc_model(nn.Module):
         """
         Pass through the model
         """ 
-        x = x.unsqueeze(1)
-
-        #positional encoding (should do outside forward but oh well)
-        B, _, H, _ = x.shape
-        pos = torch.arange(H).float() / H
-        pos = pos.unsqueeze(dim=1)
-        pos = pos.repeat(B, 1, 1, 1)
-
-        #add and remove a dim for dimensional inference then reshape the data
-        x = torch.cat([x.unsqueeze(4), pos.unsqueeze(4)], dim=3).squeeze(dim=4).reshape(-1, 1, 399) #399
-     
         
-        
-        x = self.linear1(x)
-        
-        x = torch.relu(x)
-        x = self.linear2(x)
-       
-        x = torch.relu(x)
-        x = self.linear3(x)
-        x = torch.relu(x)
-        
-        K = rearrange(self.k_proj(x), "b n (head d) -> b head n d", head=self.n_heads)
-        #print("k shape {}".format(K.shape))
-        K = self.k_norm(K) 
-        #print("k {}".format(K.shape))
-        Q = rearrange(self.q_proj(x), "b n (head d) -> b head n d", head=self.n_heads)
-        Q = self.q_norm(Q) 
-        #print("q {}".format(Q.shape))
-        V = rearrange(self.v_proj(x), "b n (head d) -> b head n d", head=self.n_heads)
-        V = self.v_norm(V) 
-        A = torch.nn.functional.elu(self.q_lin(Q) + self.k_lin(K)) #D
-        A = self.a_lin(A)
-        A = torch.nn.functional.softmax(A,dim=3) 
-        with torch.no_grad():
-            self.att_map = A.clone() #E
-        E = torch.einsum('bhfc,bhcd->bhfd',A,V) #F
-
-        E = rearrange(E, 'b head n d -> b n (head d)')
-        #print("e {}".format(E.shape))
-        E = self.linear5(E)
-        E = torch.relu(E)
-        E = self.norm1(E)
-        E = E.max(dim=1)[0]
-        y = self.linear6(E)
+        x = self.get_positional(x)
+        #print("x", x)
+        x = self.relational1(x)
+        #x = self.relational2(x)
+        #x = self.relational3(x)
+        x = x.max(dim=1)[0]
+        y = self.linear1(x)
         y = torch.nn.functional.elu(y)
-        """
-        #print("x shape {}".format(x.shape))
-        K = self.k_proj(x) #H
-        K = self.k_norm(K) 
-
-        Q = self.q_proj(x)
-        Q = self.q_norm(Q) 
-
-        V = self.v_proj(x)
-        V = self.v_norm(V) 
-        A = torch.einsum('bfe,bge->bfg',Q,K) #I
-        A = A / np.sqrt(self.node_size)
-        A = torch.nn.functional.softmax(A,dim=2) 
-        with torch.no_grad():
-            self.att_map = A.clone()
-        E = torch.einsum('bfc,bcd->bfd',A,V) #J
-        E = self.linear5(E)
-        E = torch.relu(E)
-        E = self.norm1(E)  
-        E = E.max(dim=1)[0]
-        y = self.linear6(E)  
+        y = self.linear2(y)
         y = torch.relu(y)
-        y = self.linear7(y)
-        y = torch.nn.functional.log_softmax(y,dim=1)
+        y = self.linear3(y)
+        y = torch.relu(y)
+        y = self.linear4(y)
         
-        """
+        
         return y
 
 
@@ -159,6 +94,7 @@ def train_model(parent_dir, directory, args, model,
 
     # initialize an instance of the model
     optimizer_encoder = torch.optim.Adam(model.parameters(), lr=lr_enc)
+    writer = SummaryWriter(directory + '/summaries')
 
     # reshape for efficient parallelization
     reshaped_data_train=torch.tensor(data_train, dtype=torch.float, device=args.device)
@@ -249,6 +185,8 @@ def train_model(parent_dir, directory, args, model,
         print('epoch: '+str(epoch)+' - avg loss: '+ \
               str(np.mean(real_loss_train_num))+', testset: '+ \
               str(np.mean(real_loss_test_num)))
+        writer.add_scalar("avg train loss:", np.mean(real_loss_train_num), epoch)
+        writer.add_scalar("avg test loss", np.mean(real_loss_test_num), epoch)
 
         test_loss.append(real_loss_test_num)
         train_loss.append(real_loss_train_num)
@@ -284,28 +222,28 @@ def train_model(parent_dir, directory, args, model,
                 break
 
 
-def load_model(file_name, args, len_max_molec1Hot, n_heads, model_parameters):
+def load_model(file_name, args, len_alphabet, largest_molecule_len, n_heads, model_parameters):
     """Load existing model state dict from file"""
 
-    model = fc_model(len_max_molec1Hot, n_heads, **model_parameters).to(device=args.device)
+    model = fc_model(args.device, len_alphabet, largest_molecule_len, n_heads, **model_parameters).to(device=args.device)
     model.load_state_dict(torch.load(file_name))
     model.eval()
     return model
 
 
-def train(directory, args, n_heads, model_parameters, len_max_molec1Hot, upperbound,
+def train(directory, args, n_heads, model_parameters, len_alphabet, largest_molecule_len, upperbound,
           data_train, prop_vals_train, data_test, prop_vals_test, lr_train,
           num_epochs, batch_size):
     name = change_str(directory)+'/model.pt'
 
     if os.path.exists(name):
-        model = load_model(name, args, len_max_molec1Hot, n_heads, model_parameters)
+        model = load_model(name, args, len_alphabet, largest_molecule_len, n_heads, model_parameters)
         print('Testing model...')
         test_model(directory, args, model,
                    data_train, prop_vals_train, upperbound)
     else:
         print('No models saved in file with current settings.')
-        model = fc_model(len_max_molec1Hot, n_heads, **model_parameters).to(device=args.device)
+        model = fc_model(args.device, len_alphabet, largest_molecule_len, n_heads, **model_parameters).to(device=args.device)
         model.train()
 
         print('len(data_train): ',len(data_train))
@@ -315,7 +253,7 @@ def train(directory, args, n_heads, model_parameters, len_max_molec1Hot, upperbo
                     data_train, prop_vals_train, data_test, prop_vals_test,
                     lr_train, num_epochs, batch_size)
 
-        model = fc_model(len_max_molec1Hot, n_heads, **model_parameters).to(device=args.device)
+        model = fc_model(args.device, len_alphabet, largest_molecule_len, n_heads, **model_parameters).to(device=args.device)
         model.load_state_dict(torch.load(name))
         model.eval()
         print('Testing model...')
@@ -348,7 +286,7 @@ def test_model(directory, args, model, data, data_prop, upperbound):
                                        directory)
 
 
-def dream_model(model, prop, largest_molecule_len, alphabet, upperbound,
+def dream_model(model, prop, largest_molecule_len,  alphabet, upperbound,
                 data_train, lr, batch_size, num_epochs, display=True):
     """
     Trains in the inverse of the model with a single molecular input.
@@ -577,7 +515,7 @@ def dream(directory, args, largest_molecule_len, alphabet, model, train_time,
 if __name__ == '__main__':
     # import hyperparameter and training settings from yaml
     print('Start reading data file...')
-    settings=yaml.load(open("settings.yml","r"))
+    settings=yaml.load(open("settings-res.yml","r"))
     test = settings['test_model']
     plot = settings['plot_transform']
     n_heads = settings['n_heads']
@@ -620,7 +558,7 @@ if __name__ == '__main__':
         return new_string
     print(type(model_parameters))
 
-    directory = change_str('dream_results/{}_{}_{}_{}/{}/{}' \
+    directory = change_str('dream_results/residual_stacked_{}_{}_{}_{}/{}/{}' \
                            .format(data_parameters_str,
                                    training_parameters_str,
                                    #n_layers,
@@ -633,7 +571,7 @@ if __name__ == '__main__':
     args = use_gpu()
 
     # data-preprocessing
-    data, prop_vals, alphabet, len_max_molec1Hot, largest_molecule_len = \
+    data, prop_vals, alphabet, len_alphabet, largest_molecule_len = \
         data_loader.preprocess(num_mol, file_name)
 
     # add stochasticity to data
@@ -649,7 +587,7 @@ if __name__ == '__main__':
         = data_loader.split_train_test(data, prop_vals, num_train, 0.85)
 
     t=time.process_time()
-    model = train(directory, args, n_heads, model_parameters, len_max_molec1Hot,
+    model = train(directory, args, n_heads, model_parameters, len_alphabet, largest_molecule_len,
                   upperbound_tr, data_train, prop_vals_train, data_test,
                   prop_vals_test, lr_train, num_epochs, batch_size)
     train_time = time.process_time()-t
