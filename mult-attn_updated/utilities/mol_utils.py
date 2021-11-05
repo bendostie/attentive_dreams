@@ -20,9 +20,9 @@ from utilities.utils import make_dir
 def edit_hot(hot, upper_bound, device):
     """Replaces all zeroes with a random float in the range [0,upper_bound]"""
     #t1=time.clock()
-    newhot=hot+upper_bound*rand(hot.shape)
+    newhot=hot+upper_bound*rand(hot.shape).to(device=device)
     newhot[newhot>1]=1
-    return newhot.to(device=device)
+    return newhot
 
 
 def logP_from_molecule(smiles_list):
