@@ -24,7 +24,7 @@ from torch import nn
 
 from einops import rearrange
 
-from utilities.utils import change_str, make_dir, use_cpu
+from utilities.utils import change_str, make_dir, use_gpu2
 from utilities.mol_utils import edit_hot, lst_of_logP, multiple_hot_to_indices
 
 
@@ -569,7 +569,7 @@ if __name__ == '__main__':
                                    lr_train))
     make_dir(directory)
 
-    args = use_cpu()
+    args = use_gpu2()
 
     # data-preprocessing
     data, prop_vals, alphabet, len_alphabet, largest_molecule_len = \
