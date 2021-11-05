@@ -226,7 +226,7 @@ def test_model(directory, args, model, data, data_prop, upperbound):
 
     # feedforward step
     trained_data_prop = model(test_data_edit)
-    trained_data_prop = trained_data_prop.reshape(data.shape[0]).clone().detach().numpy()
+    trained_data_prop = trained_data_prop.reshape(data.shape[0]).clone().detach().cpu().numpy()
 
     # compare ground truth data to modelled data
     plot_utils.test_model_before_dream(trained_data_prop, computed_data_prop,
@@ -289,7 +289,7 @@ def dream_model(model, prop, largest_molecule_len, alphabet, upperbound,
         loss.backward()
         optimizer_encoder.step()
 
-        real_loss=loss.detach().numpy()
+        real_loss=loss.detach().cpu().numpy()
         loss_prediction.append(real_loss)
 
 
