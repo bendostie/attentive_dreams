@@ -110,7 +110,7 @@ def train_model(parent_dir, directory, args, model,
     print("data after reshape: {}".format(reshaped_data_train.shape))
     '''
     # add random noise to one-hot encoding
-    reshaped_data_test_edit = edit_hot(data_test, upperbound)
+    reshaped_data_test_edit = edit_hot(data_test, upperbound, args.device)
 
     
 
@@ -133,7 +133,8 @@ def train_model(parent_dir, directory, args, model,
         data_train_prop = data_train_prop[x]
         #print("data before edit_hot: {}".format(reshaped_data_train.shape))
         reshaped_data_train_edit = edit_hot(reshaped_data_train,
-                                            upper_bound=upperbound)
+                                            upperbound, 
+                                            args.device)
         #print("data after edit_hot: {}".format(reshaped_data_train_edit.shape))
 
         for batch_iteration in range(int(len(reshaped_data_train_edit)/batch_size)):
@@ -275,7 +276,7 @@ def test_model(directory, args, model, data, data_prop, upperbound):
     #                              test_data.shape[1] * test_data.shape[2])
 
     # add random noise to one-hot encoding with specified upperbound
-    test_data_edit = edit_hot(test_data, upperbound)
+    test_data_edit = edit_hot(test_data, upperbound, args.device)
 
     # feedforward step
     trained_data_prop = model(test_data_edit)
@@ -304,7 +305,7 @@ def dream_model(model, prop, largest_molecule_len,  alphabet, upperbound,
     #                                data_train.shape[1] * data_train.shape[2])
 
     # add random noise to one-hot encoding
-    data_train_edit = edit_hot(data_train, upper_bound=upperbound)
+    data_train_edit = edit_hot(data_train, upperbound, args.device)
     data_train_var=torch.autograd.Variable(data_train_edit, requires_grad=True)
     data_train_prop=torch.tensor([prop], dtype=torch.float)
 
