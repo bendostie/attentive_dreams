@@ -559,7 +559,7 @@ if __name__ == '__main__':
         return new_string
     print(type(model_parameters))
 
-    directory = change_str('dream_results/residual_stacked_{}_{}_{}_{}/{}/{}' \
+    directory = change_str('dream_results/residual_stacked_nolin_{}_{}_{}_{}/{}/{}' \
                            .format(data_parameters_str,
                                    training_parameters_str,
                                    #n_layers,
