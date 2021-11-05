@@ -24,7 +24,7 @@ from torch import nn
 
 from einops import rearrange
 
-from utilities.utils import change_str, make_dir, use_gpu
+from utilities.utils import change_str, make_dir, use_cpu
 from utilities.mol_utils import edit_hot, lst_of_logP, multiple_hot_to_indices
 
 
@@ -283,8 +283,8 @@ def test_model(directory, args, model, data, data_prop, upperbound):
     trained_data_prop = trained_data_prop.reshape(data.shape[0]).clone().detach().cpu().numpy()
 
     # compare ground truth data to modelled data
-    plot_utils.test_model_before_dream(trained_data_prop, computed_data_prop,
-                                       directory)
+    #plot_utils.test_model_before_dream(trained_data_prop, computed_data_prop,
+    #                                   directory)
 
 
 def dream_model(model, prop, largest_molecule_len,  alphabet, upperbound,
@@ -569,7 +569,7 @@ if __name__ == '__main__':
                                    lr_train))
     make_dir(directory)
 
-    args = use_gpu()
+    args = use_cpu()
 
     # data-preprocessing
     data, prop_vals, alphabet, len_alphabet, largest_molecule_len = \

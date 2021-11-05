@@ -50,3 +50,20 @@ def use_gpu():
         args.device = torch.device('cpu:0')
 
     return args
+
+def use_cpu():
+    """Connects training to gpu resources via args."""
+
+    # if the system supports CUDA, utilize it for faster computation.
+    parser = argparse.ArgumentParser(description='Set device')
+    parser.add_argument('--disable-cuda', action='store_true',
+                        help='Disable CUDA')
+    args = parser.parse_args()
+    args.device = None
+
+    if not args.disable_cuda and torch.cuda.is_available():
+        args.device = torch.device('cpu:0')
+    else:
+        args.device = torch.device('cpu:0')
+
+    return args
