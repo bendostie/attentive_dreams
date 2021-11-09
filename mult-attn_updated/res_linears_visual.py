@@ -24,8 +24,8 @@ from torch import nn
 
 from einops import rearrange
 
-from utilities.utils import change_str, make_dir, use_cpu, use_gpu2
-from utilities.mol_utils import edit_hot, lst_of_logP, multiple_hot_to_indices
+from utilities.utils import change_str, make_dir, use_gpu
+from utilities.mol_utils import edit_hot, indices_to_selfies, lst_of_logP, multiple_hot_to_indices
 
 
 class fc_model(nn.Module):
@@ -283,8 +283,8 @@ def test_model(directory, args, model, data, data_prop, upperbound):
     trained_data_prop = trained_data_prop.reshape(data.shape[0]).clone().detach().cpu().numpy()
 
     # compare ground truth data to modelled data
-    #plot_utils.test_model_before_dream(trained_data_prop, computed_data_prop,
-    #                                   directory)
+    plot_utils.test_model_before_dream(trained_data_prop, computed_data_prop,
+                                       directory)
 
 
 def dream_model(model, prop, largest_molecule_len,  alphabet, upperbound,
@@ -355,9 +355,15 @@ def dream_model(model, prop, largest_molecule_len,  alphabet, upperbound,
         molecule_reshaped=torch.reshape(data_train_var,
                                         (1, largest_molecule_len,
                                          len(alphabet)))
+            
         gathered_indices = multiple_hot_to_indices(molecule_reshaped)
+        #print(gathered_indices)
+        selfies_mol = indices_to_selfies(gathered_indices[0], alphabet)
+        print("selfies", selfies_mol)
+        print("attention", model.relational1.att_map[0][5].max(dim=0)[0])
+        
         prop_of_mol, smiles_of_mol=lst_of_logP(gathered_indices, alphabet)
-
+        print(smiles_of_mol)
         if len(interm_prop)==0 or interm_prop[len(interm_prop)-1] != prop_of_mol[0]:
 
             # collect intermediate molecules
@@ -423,12 +429,14 @@ def dream(directory, args, largest_molecule_len, alphabet, model, train_time,
 
         # convert one-hot encoding to SMILES molecule
         mol = data_dream[i].clone()
+        
         gathered_mols=[]
         _,max_index=mol.max(1)
         gathered_mols.append(max_index.data.cpu().numpy().tolist())
         prop_of_mol,smiles_of_mol=mol_utils.lst_of_logP(gathered_mols, alphabet)
-
+        
         mol1 = smiles_of_mol[0]
+        
         mol1_prop = prop_of_mol[0]
         train_mol = torch.reshape(mol, (1, mol.shape[0], mol.shape[1]))
 
@@ -516,7 +524,7 @@ def dream(directory, args, largest_molecule_len, alphabet, model, train_time,
 if __name__ == '__main__':
     # import hyperparameter and training settings from yaml
     print('Start reading data file...')
-    settings=yaml.load(open("settings-long.yml","r"))
+    settings=yaml.load(open("settings.yml","r"))
     test = settings['test_model']
     plot = settings['plot_transform']
     n_heads = settings['n_heads']
@@ -569,7 +577,7 @@ if __name__ == '__main__':
                                    lr_train))
     make_dir(directory)
 
-    args = use_cpu()
+    args = use_gpu()
 
     # data-preprocessing
     data, prop_vals, alphabet, len_alphabet, largest_molecule_len = \

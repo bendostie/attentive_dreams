@@ -13,7 +13,7 @@ data_preprocess:
 
 data:
   num_train: 10000
-  num_dream: 10000
+  num_dream: 2
 
 model:
   num_of_neurons_layer1: 500
