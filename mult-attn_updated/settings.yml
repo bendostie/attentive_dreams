@@ -13,7 +13,7 @@ data_preprocess:
 
 data:
   num_train: 10000
-  num_dream: 2
+  num_dream: 1000
 
 model:
   num_of_neurons_layer1: 500
@@ -21,7 +21,7 @@ model:
   num_of_neurons_layer3: 500
 
 training:
-  num_epochs: 10000
+  num_epochs: 1000
   batch_size: 1
 
 dreaming:
