@@ -156,7 +156,7 @@ def train_model(parent_dir, directory, args, model,
             avg = sum(test_loss[len(test_loss)-90:len(test_loss)])
             avg_test_loss.append(avg)
 
-            print(avg_test_loss)
+            
 
             if len(avg_test_loss)>=50 and avg>avg_test_loss[len(avg_test_loss)-40]:
                 print('Train loss is increasing, stop training')

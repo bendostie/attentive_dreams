@@ -2,17 +2,17 @@ mols: ['O1C=CN=C1']
 upperbound_tr: 0.95
 upperbound_dr: 0.90
 property_value: 6
-lr_train: 1e-06
+lr_train: 1e-05
 lr_dream: .01
 test_model: 0
 plot_transform: 0
 n_heads: 6
 
 data_preprocess:
-  smiles_file: datasets/0SelectedSMILES_QM9.txt
+  smiles_file: datasets/training_set.txt
 
 data:
-  num_train: 132039
+  num_train: 122039
   num_dream: 10000
 
 model:
@@ -22,7 +22,7 @@ model:
 
 training:
   num_epochs: 100000
-  batch_size: 1
+  batch_size: 10
 
 dreaming:
   batch_size: 1

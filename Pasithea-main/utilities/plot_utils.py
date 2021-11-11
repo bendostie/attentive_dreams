@@ -13,7 +13,7 @@ def running_avg_test_loss(avg_test_loss, directory):
     plt.xlabel('Epochs')
     plt.ylabel('Running average test loss')
     name = name = directory + '/runningavg_testloss'
-    plt.savefig(name)
+    plt.savefig(name, dpi= 2000)
     closefig()
 
 
@@ -32,7 +32,7 @@ def test_model_after_train(calc_train, real_vals_prop_train,
     plt.ylabel('Computed '+prop_name)
     plt.title('Train set (red), test set (blue)')
     name = directory + '/test_model_after_training'
-    plt.savefig(name)
+    plt.savefig(name, dpi= 2000)
     closefig()
 
 
@@ -45,7 +45,7 @@ def test_model_before_dream(trained_data_prop, computed_data_prop,
     plt.xlabel('Modelled '+prop_name)
     plt.ylabel('Computed '+prop_name)
     name = directory + '/test_model_before_dreaming'
-    plt.savefig(name)
+    plt.savefig(name, dpi= 2000)
     plt.show()
     closefig()
 
@@ -60,7 +60,7 @@ def prediction_loss(train_loss, test_loss, directory):
     plt.xlabel('Epochs')
     plt.ylabel('Loss')
     name = directory + '/predictionloss_test&train'
-    plt.savefig(name)
+    plt.savefig(name, dpi= 2000)
     closefig()
 
 
@@ -72,7 +72,7 @@ def dreamed_histogram(prop_lst, prop, directory, prop_name='logP'):
     plt.hist(prop_lst, density=True, bins=30)
     plt.ylabel(prop_name+' - around '+str(prop))
     name = directory + '/dreamed_histogram'
-    plt.savefig(name)
+    plt.savefig(name, dpi= 2000)
     closefig()
 
 
@@ -85,7 +85,7 @@ def initial_histogram(prop_dream, directory,
     plt.hist(prop_dream, density=True, bins=30)
     plt.ylabel(prop_name + ' - ' + dataset_name)
     name = directory + '/QM9_histogram'
-    plt.savefig(name)
+    plt.savefig(name, dpi= 2000)
     closefig()
 
 

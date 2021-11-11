@@ -181,13 +181,16 @@ def preprocess(num_mol, file_name):
                                              largest_molecule_len,
                                              alphabet)
     print('    Finished creating one-hot encoding.\n')
-
+    print("encoding list: {} mol length: {}  alphabet: {}".format(len(encoding_list),
+                                             largest_molecule_len,
+                                             alphabet.shape))
     len_max_molec = data.shape[1]
     len_alphabet = data.shape[2]
     len_max_molec1Hot = len_max_molec * len_alphabet
     print(' ')
     print('Alphabet has ', len_alphabet, ' letters, largest molecule is ',
           len_max_molec, ' letters.')
+    
 
     return data, prop_vals, alphabet, len_max_molec1Hot, largest_molecule_len
 
