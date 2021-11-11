@@ -63,8 +63,9 @@ class Relational_Layer(nn.Module):
         #print("e {}".format(E.shape))
         E = self.linear(E)
         E = torch.relu(E)
-        E = self.norm(E)
         if self.residual:
             E = E + x
+        E = self.norm(E)
+        
         #print("e2 {}".format(E.shape))
         return E
