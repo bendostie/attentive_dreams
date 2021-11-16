@@ -9,7 +9,7 @@ plot_transform: 0
 n_heads: 12
 
 data_preprocess:
-  smiles_file: datasets/0SelectedSMILES_QM9.txt
+  smiles_file: datasets/training_set.txt.txt
 
 data:
   num_train: 10000
