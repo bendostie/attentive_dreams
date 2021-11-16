@@ -6,7 +6,7 @@ lr_train: 1e-06
 lr_dream: .01
 test_model: 0
 plot_transform: 0
-n_heads: 6
+n_heads: 12
 
 data_preprocess:
   smiles_file: datasets/0SelectedSMILES_QM9.txt

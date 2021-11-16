@@ -1,7 +1,7 @@
 mols: ['O1C=CN=C1']
 upperbound_tr: 0.95
 upperbound_dr: 0.90
-property_value: 6
+property_value: -6
 lr_train: 1e-05
 lr_dream: .01
 test_model: 0
@@ -13,7 +13,7 @@ data_preprocess:
 
 data:
   num_train: 122039
-  num_dream: 10000
+  num_dream: 100000
 
 model:
   num_of_neurons_layer1: 500
