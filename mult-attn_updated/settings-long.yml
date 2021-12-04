@@ -18,7 +18,7 @@ data:
 model:
   num_of_neurons_layer1: 500
   num_of_neurons_layer2: 500
-  num_of_neurons_layer3: 450
+  num_of_neurons_layer3: 460
 
 training:
   num_epochs: 100000
