@@ -25,7 +25,7 @@ from torch import nn
 from einops import rearrange
 
 from utilities.utils import change_str, make_dir, use_gpu
-from utilities.mol_utils import edit_hot, lst_of_logP, multiple_hot_to_indices
+from utilities.mol_utils import edit_hot, indices_to_selfies, logP_from_molecule, lst_of_logP, multiple_hot_to_indices, multiple_selfies_to_hot
 
 
 class fc_model(nn.Module):
@@ -44,8 +44,8 @@ class fc_model(nn.Module):
         self.n_heads = n_heads
 
         self.relational1 = Relational_Layer(self.node_size, self.node_size, self.n_nodes, self.n_heads)
-        self.relational2 = Relational_Layer(self.node_size, self.node_size, self.n_nodes, self.n_heads)
-        self.relational3 = Relational_Layer(self.node_size, self.node_size, self.n_nodes, self.n_heads)
+        #self.relational2 = Relational_Layer(self.node_size, self.node_size, self.n_nodes, self.n_heads)
+        #self.relational3 = Relational_Layer(self.node_size, self.node_size, self.n_nodes, self.n_heads)
         self.get_positional = Positional_Encoder(largest_molecule_len, device)
         
         
@@ -72,8 +72,8 @@ class fc_model(nn.Module):
         x = self.get_positional(x)
         #print("x", x)
         x = self.relational1(x)
-        x = self.relational2(x)
-        x = self.relational3(x)
+        #x = self.relational2(x)
+        #x = self.relational3(x)
         x = x.max(dim=1)[0]
         y = self.linear1(x)
         y = torch.nn.functional.elu(y)
@@ -89,7 +89,7 @@ class fc_model(nn.Module):
 
 def train_model(parent_dir, directory, args, model,
                 upperbound, data_train, data_train_prop, data_test,
-                data_test_prop, lr_enc, num_epochs, batch_size):
+                data_test_prop, lr_enc, num_epochs, batch_size, vis_mols, vis_mol_props):
     """Train the model"""
 
     # initialize an instance of the model
@@ -97,26 +97,19 @@ def train_model(parent_dir, directory, args, model,
     writer = SummaryWriter(directory + '/summaries')
 
     # reshape for efficient parallelization
-    reshaped_data_train=torch.tensor(data_train, dtype=torch.float, device=args.device)
-    reshaped_data_test = data_test=torch.tensor(data_test, dtype=torch.float, device=args.device)
-    '''
-    print("data before reshape: {}".format(data_train.shape))
-    reshaped_data_train = torch.reshape(data_train,
-                                        (data_train.shape[0],
-                                         data_train.shape[1]*data_train.shape[2]))
-    reshaped_data_test = torch.reshape(data_test,
-                                       (data_test.shape[0],
-                                        data_test.shape[1]*data_test.shape[2]))
-    print("data after reshape: {}".format(reshaped_data_train.shape))
-    '''
+    data_train=torch.tensor(data_train, dtype=torch.float, device=args.device)
+    data_test=torch.tensor(data_test, dtype=torch.float, device=args.device)
+
     # add random noise to one-hot encoding
-    reshaped_data_test_edit = edit_hot(data_test, upperbound, args.device)
-
+    data_test_edit = edit_hot(data_test, upperbound, args.device)
     
-
     data_train_prop=torch.tensor(data_train_prop,
                                  dtype=torch.float, device=args.device)
     data_test_prop=torch.tensor(data_test_prop,
+                                dtype=torch.float, device=args.device)
+    vis_mols = torch.tensor(vis_mols,
+                                dtype=torch.float, device=args.device)
+    vis_mol_props = torch.tensor(vis_mol_props,
                                 dtype=torch.float, device=args.device)
 
     test_loss=[]
@@ -127,24 +120,24 @@ def train_model(parent_dir, directory, args, model,
     for epoch in range(num_epochs):
 
         # add stochasticity to the training
-        x = [i for i in range(len(reshaped_data_train))]  # random shuffle input
+        x = [i for i in range(len(data_train))]  # random shuffle input
         shuffle(x)
-        reshaped_data_train  = reshaped_data_train[x]
+        data_train  = data_train[x]
         data_train_prop = data_train_prop[x]
-        #print("data before edit_hot: {}".format(reshaped_data_train.shape))
-        reshaped_data_train_edit = edit_hot(reshaped_data_train,
-                                            upperbound,
+        
+        data_train_edit = edit_hot(data_train,
+                                            upperbound, 
                                             args.device)
-        #print("data after edit_hot: {}".format(reshaped_data_train_edit.shape))
+        
 
-        for batch_iteration in range(int(len(reshaped_data_train_edit)/batch_size)):
+        for batch_iteration in range(int(len(data_train_edit)/batch_size)):
 
             current_smiles_start, current_smiles_stop = \
                 batch_iteration * batch_size, (batch_iteration + 1) * batch_size
 
             # slice data into batches
             
-            curr_mol=reshaped_data_train_edit[current_smiles_start : \
+            curr_mol=data_train_edit[current_smiles_start : \
                                               current_smiles_stop]
             curr_prop=data_train_prop[current_smiles_start : \
                                       current_smiles_stop]
@@ -157,6 +150,7 @@ def train_model(parent_dir, directory, args, model,
 
             # mean-squared error between calculated property and modelled property
             criterion = nn.MSELoss()
+            
             real_loss=criterion(calc_properties, curr_prop)
 
             loss = torch.clamp(real_loss, min = 0., max = 50000.).double()
@@ -167,7 +161,7 @@ def train_model(parent_dir, directory, args, model,
             optimizer_encoder.step()
 
         # calculate train set
-        calc_train_set_property = model(reshaped_data_train_edit)
+        calc_train_set_property = model(data_train_edit)
         calc_train_set_property=torch.reshape(calc_train_set_property,
                                               [len(calc_train_set_property)])
         criterion = nn.MSELoss()
@@ -175,13 +169,44 @@ def train_model(parent_dir, directory, args, model,
         real_loss_train_num=real_loss_train.detach().cpu().numpy()
 
         # calculate test set
-        calc_test_set_property = model(reshaped_data_test_edit)
+        calc_test_set_property = model(data_test_edit)
         criterion = nn.MSELoss()
         calc_test_set_property=torch.reshape(calc_test_set_property,
                                              [len(calc_test_set_property)])
         real_loss_test=criterion(calc_test_set_property, data_test_prop)
         real_loss_test_num=real_loss_test.detach().cpu().numpy()
+        
+        #record attention matrixxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+        
+        #calc property and loss for each molecule
+        if epoch%100==0:
+            for i in range(0, len(vis_mols)):        
+                vis_mol_calc_prop  = model(vis_mols[i].unsqueeze(0))
+                vis_mol_prop = vis_mol_props[i]
+                vis_criterion = nn.MSELoss()
+                vis_loss = vis_criterion(vis_mol_calc_prop, vis_mol_prop).detach().cpu().numpy()
+                #reformat for saving and save
+                vis_mol_reshaped=torch.reshape(vis_mols[i],
+                                            (1, largest_molecule_len,
+                                            len(alphabet)))
+                
+                gathered_indices = multiple_hot_to_indices(vis_mol_reshaped)
+            
+                selfies_mol = indices_to_selfies(gathered_indices[0], alphabet)
+                
+                #write visual to file
+                name = directory + '/visual' +str(epoch)+'.txt'
+                with open(name, "w+") as f:
 
+                    f.write('epoch: '+str(epoch) +'\n')
+                    f.write('selfies: '+str(selfies_mol) +'\n')
+                    f.write('attention: '+str(model.relational1.att_map[0].max(dim=1)[0].max(dim=0)[0]) +'\n')
+                    f.write('predicted: '+str(vis_mol_calc_prop) +'\n')
+                    f.write('actual: '+str(vis_mol_prop) +'\n')
+                    f.close()
+                print("selfies", selfies_mol)
+                print("attention", model.relational1.att_map[0].max(dim=1)[0].max(dim=0)[0])
+        
 
         print('epoch: '+str(epoch)+' - avg loss: '+ \
               str(np.mean(real_loss_train_num))+', testset: '+ \
@@ -203,7 +228,6 @@ def train_model(parent_dir, directory, args, model,
             avg = sum(test_loss[len(test_loss)-90:len(test_loss)])
             avg_test_loss.append(avg)
 
-            #print(avg_test_loss)
 
             if len(avg_test_loss)>=50 and avg>avg_test_loss[len(avg_test_loss)-40]:
                 print('Train loss is increasing, stop training')
@@ -234,14 +258,14 @@ def load_model(file_name, args, len_alphabet, largest_molecule_len, n_heads, mod
 
 def train(directory, args, n_heads, model_parameters, len_alphabet, largest_molecule_len, upperbound,
           data_train, prop_vals_train, data_test, prop_vals_test, lr_train,
-          num_epochs, batch_size):
+          num_epochs, batch_size, vis_mols, vis_mol_props):
     name = change_str(directory)+'/model.pt'
 
     if os.path.exists(name):
         model = load_model(name, args, len_alphabet, largest_molecule_len, n_heads, model_parameters)
-        print('Testing model...')
-        test_model(directory, args, model,
-                   data_train, prop_vals_train, upperbound)
+        print('Not testing model...')
+        #test_model(directory, args, model,
+        #           data_train, prop_vals_train, upperbound)
     else:
         print('No models saved in file with current settings.')
         model = fc_model(args.device, len_alphabet, largest_molecule_len, n_heads, **model_parameters).to(device=args.device)
@@ -252,7 +276,7 @@ def train(directory, args, n_heads, model_parameters, len_alphabet, largest_mole
 
         train_model(name, directory, args, model, upperbound,
                     data_train, prop_vals_train, data_test, prop_vals_test,
-                    lr_train, num_epochs, batch_size)
+                    lr_train, num_epochs, batch_size, vis_mols, vis_mol_props)
 
         model = fc_model(args.device, len_alphabet, largest_molecule_len, n_heads, **model_parameters).to(device=args.device)
         model.load_state_dict(torch.load(name))
@@ -355,9 +379,17 @@ def dream_model(model, prop, largest_molecule_len,  alphabet, upperbound,
         molecule_reshaped=torch.reshape(data_train_var,
                                         (1, largest_molecule_len,
                                          len(alphabet)))
+            
         gathered_indices = multiple_hot_to_indices(molecule_reshaped)
+        #print(gathered_indices)
+        selfies_mol = indices_to_selfies(gathered_indices[0], alphabet)
+        print("selfies", selfies_mol)
+        print("attention", model.relational1.att_map[0].max(dim=1)[0])
+        
+        
+        
         prop_of_mol, smiles_of_mol=lst_of_logP(gathered_indices, alphabet)
-
+        print(smiles_of_mol)
         if len(interm_prop)==0 or interm_prop[len(interm_prop)-1] != prop_of_mol[0]:
 
             # collect intermediate molecules
@@ -423,12 +455,14 @@ def dream(directory, args, largest_molecule_len, alphabet, model, train_time,
 
         # convert one-hot encoding to SMILES molecule
         mol = data_dream[i].clone()
+        
         gathered_mols=[]
         _,max_index=mol.max(1)
         gathered_mols.append(max_index.data.cpu().numpy().tolist())
         prop_of_mol,smiles_of_mol=mol_utils.lst_of_logP(gathered_mols, alphabet)
-
+        
         mol1 = smiles_of_mol[0]
+        
         mol1_prop = prop_of_mol[0]
         train_mol = torch.reshape(mol, (1, mol.shape[0], mol.shape[1]))
 
@@ -516,7 +550,7 @@ def dream(directory, args, largest_molecule_len, alphabet, model, train_time,
 if __name__ == '__main__':
     # import hyperparameter and training settings from yaml
     print('Start reading data file...')
-    settings=yaml.load(open("settings-long.yml","r"))
+    settings=yaml.load(open("settings_visual.yml","r"))
     test = settings['test_model']
     plot = settings['plot_transform']
     n_heads = settings['n_heads']
@@ -559,7 +593,7 @@ if __name__ == '__main__':
         return new_string
     print(type(model_parameters))
 
-    directory = change_str('dream_results/residual_stacked_{}_{}_{}_{}/{}/{}' \
+    directory = change_str('dream_results/visual_{}_{}_{}_{}/{}/{}' \
                            .format(data_parameters_str,
                                    training_parameters_str,
                                    #n_layers,
@@ -574,7 +608,19 @@ if __name__ == '__main__':
     # data-preprocessing
     data, prop_vals, alphabet, len_alphabet, largest_molecule_len = \
         data_loader.preprocess(num_mol, file_name)
-
+        
+    #grab visualization molecules
+    vis_mol_props = logP_from_molecule(mols)
+    mols, _ = data_loader.get_selfie_and_smiles_encodings(mols)
+    mols = multiple_selfies_to_hot(mols,
+                                   largest_molecule_len,
+                                   alphabet)
+    vis_mols = torch.tensor(mols, dtype=torch.float, device=args.device)
+    print("xxxxxxxxxxxxxx", vis_mols.shape)
+    
+    
+    
+    print("vis", vis_mols, vis_mol_props)
     # add stochasticity to data
     x = [i for i in range(len(data))]  # random shuffle input
     shuffle(x)
@@ -590,7 +636,7 @@ if __name__ == '__main__':
     t=time.process_time()
     model = train(directory, args, n_heads, model_parameters, len_alphabet, largest_molecule_len,
                   upperbound_tr, data_train, prop_vals_train, data_test,
-                  prop_vals_test, lr_train, num_epochs, batch_size)
+                  prop_vals_test, lr_train, num_epochs, batch_size, vis_mols, vis_mol_props)
     train_time = time.process_time()-t
 
     directory += change_str('/{}_{}'.format(upperbound_dr,

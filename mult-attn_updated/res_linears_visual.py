@@ -181,6 +181,9 @@ def train_model(parent_dir, directory, args, model,
                                              [len(calc_test_set_property)])
         real_loss_test=criterion(calc_test_set_property, data_test_prop)
         real_loss_test_num=real_loss_test.detach().cpu().numpy()
+        
+        #record attention matrix
+        
 
 
         print('epoch: '+str(epoch)+' - avg loss: '+ \
@@ -203,7 +206,6 @@ def train_model(parent_dir, directory, args, model,
             avg = sum(test_loss[len(test_loss)-90:len(test_loss)])
             avg_test_loss.append(avg)
 
-            #print(avg_test_loss)
 
             if len(avg_test_loss)>=50 and avg>avg_test_loss[len(avg_test_loss)-40]:
                 print('Train loss is increasing, stop training')
@@ -239,9 +241,9 @@ def train(directory, args, n_heads, model_parameters, len_alphabet, largest_mole
 
     if os.path.exists(name):
         model = load_model(name, args, len_alphabet, largest_molecule_len, n_heads, model_parameters)
-        print('Testing model...')
-        test_model(directory, args, model,
-                   data_train, prop_vals_train, upperbound)
+        print('Not testing model...')
+        #test_model(directory, args, model,
+        #           data_train, prop_vals_train, upperbound)
     else:
         print('No models saved in file with current settings.')
         model = fc_model(args.device, len_alphabet, largest_molecule_len, n_heads, **model_parameters).to(device=args.device)
@@ -360,7 +362,7 @@ def dream_model(model, prop, largest_molecule_len,  alphabet, upperbound,
         #print(gathered_indices)
         selfies_mol = indices_to_selfies(gathered_indices[0], alphabet)
         print("selfies", selfies_mol)
-        print("attention", model.relational1.att_map[0][5].max(dim=0)[0])
+        print("attention", model.relational1.att_map[0].max(dim=1)[0])
         
         prop_of_mol, smiles_of_mol=lst_of_logP(gathered_indices, alphabet)
         print(smiles_of_mol)
@@ -524,7 +526,7 @@ def dream(directory, args, largest_molecule_len, alphabet, model, train_time,
 if __name__ == '__main__':
     # import hyperparameter and training settings from yaml
     print('Start reading data file...')
-    settings=yaml.load(open("settings.yml","r"))
+    settings=yaml.load(open("settings_visual.yml","r"))
     test = settings['test_model']
     plot = settings['plot_transform']
     n_heads = settings['n_heads']

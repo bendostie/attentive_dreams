@@ -157,6 +157,7 @@ def train_model(parent_dir, directory, args, model,
 
             # mean-squared error between calculated property and modelled property
             criterion = nn.MSELoss()
+            print("loss: ", calc_properties, curr_prop)
             real_loss=criterion(calc_properties, curr_prop)
 
             loss = torch.clamp(real_loss, min = 0., max = 50000.).double()
