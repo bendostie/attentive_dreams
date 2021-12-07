@@ -195,12 +195,13 @@ def train_model(parent_dir, directory, args, model,
                 selfies_mol = indices_to_selfies(gathered_indices[0], alphabet)
                 
                 #write visual to file
-                name = directory + '/visual' +str(epoch)+'.txt'
+                name = directory + '/' + str(i) + 'visual' +str(epoch)+'.txt'
                 with open(name, "w+") as f:
 
                     f.write('epoch: '+str(epoch) +'\n')
                     f.write('selfies: '+str(selfies_mol) +'\n')
                     f.write('attention: '+str(model.relational1.att_map[0].max(dim=1)[0].max(dim=0)[0]) +'\n')
+                    f.write('full attantion: '+str(model.relational1.att_map[0].max(dim=1)[0]))
                     f.write('predicted: '+str(vis_mol_calc_prop) +'\n')
                     f.write('actual: '+str(vis_mol_prop) +'\n')
                     f.close()
