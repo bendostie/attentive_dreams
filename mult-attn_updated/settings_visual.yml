@@ -2,7 +2,7 @@ mols: ['N=C1NC2=C(O1)N=CO2', 'N#CC#N', 'O=C1NC(=O)C=C1']
 upperbound_tr: 0.95
 upperbound_dr: 0.90
 property_value: 6
-lr_train: 1e-06
+lr_train: 1e-05
 lr_dream: .01
 test_model: 0
 plot_transform: 0
