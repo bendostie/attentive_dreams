@@ -12,7 +12,7 @@ data_preprocess:
   smiles_file: datasets/training_set.txt
 
 data:
-  num_train: 12200
+  num_train: 122000
   num_dream: 10000
 
 model:
