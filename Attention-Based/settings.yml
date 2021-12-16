@@ -1,0 +1,29 @@
+mols: ['O1C=CN=C1']
+upperbound_tr: 0.95
+upperbound_dr: 0.90
+property_value: 6
+lr_train: 1e-06
+lr_dream: .01
+test_model: 0
+plot_transform: 0
+n_heads: 6
+
+data_preprocess:
+  smiles_file: datasets/training_set.txt
+
+data:
+  num_train: 10000
+  num_dream: 1000
+
+model:
+  num_of_neurons_layer1: 500
+  num_of_neurons_layer2: 500
+  num_of_neurons_layer3: 480
+
+training:
+  num_epochs: 1000
+  batch_size: 1
+
+dreaming:
+  batch_size: 1
+  num_epochs: 2000
