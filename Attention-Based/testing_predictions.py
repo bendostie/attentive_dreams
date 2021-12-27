@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Example script demonstrating molecular transformations, using logP as target.
-The entire cycle - training and dreaming - is involved.
+Calculates MAE and RMSE for saved model on validation set
+Validation set location is set in settings-long.yml
 """
 import math
 import sys
@@ -33,9 +33,6 @@ class fc_model(nn.Module):
 
     def __init__(self, device, len_alphabet, largest_molecule_len, n_heads, num_of_neurons_layer1,
                  num_of_neurons_layer2, num_of_neurons_layer3):
-        """
-        Fully Connected layers for the RNN.
-        """
         super(fc_model, self).__init__()
 
 
@@ -135,7 +132,7 @@ if __name__ == '__main__':
     plot = settings['plot_transform']
     n_heads = settings['n_heads']
     mols = settings['mols']
-    file_name = settings['data_preprocess']['smiles_file']
+    file_name = settings['data_preprocess']['validation_file']
     lr_train=settings['lr_train']
     lr_train=float(lr_train)
     lr_dream=settings['lr_dream']

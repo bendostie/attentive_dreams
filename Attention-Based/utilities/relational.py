@@ -1,3 +1,6 @@
+"""
+Attention/relational mechanism and positional encoder
+"""
 
 import torch
 from torch import nn

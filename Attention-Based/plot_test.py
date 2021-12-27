@@ -1,3 +1,4 @@
+'''figuring out plotting'''
 import numpy as np
 import matplotlib.pyplot as plt
 

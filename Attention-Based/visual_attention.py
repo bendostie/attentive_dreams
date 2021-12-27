@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Example script demonstrating molecular transformations, using logP as target.
-The entire cycle - training and dreaming - is involved.
+Saves attention weights during dreaming and prints weights during dreaming. 
+Visualized molecules are taken from setting-visual.yml and weights are saved to results folder
 """
 
 import sys
@@ -551,7 +551,7 @@ def dream(directory, args, largest_molecule_len, alphabet, model, train_time,
 if __name__ == '__main__':
     # import hyperparameter and training settings from yaml
     print('Start reading data file...')
-    settings=yaml.load(open("settings_visual.yml","r"))
+    settings=yaml.load(open("settings-visual.yml","r"))
     test = settings['test_model']
     plot = settings['plot_transform']
     n_heads = settings['n_heads']

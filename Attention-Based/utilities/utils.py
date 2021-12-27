@@ -52,7 +52,7 @@ def use_gpu():
     return args
 
 def use_cpu():
-    """Connects training to gpu resources via args."""
+    """Ensures use of CPU."""
 
     # if the system supports CUDA, utilize it for faster computation.
     parser = argparse.ArgumentParser(description='Set device')
@@ -69,7 +69,7 @@ def use_cpu():
     return args
 
 def use_gpu2():
-    """Connects training to gpu resources via args."""
+    """Connects training to second gpu resources via args."""
 
     # if the system supports CUDA, utilize it for faster computation.
     parser = argparse.ArgumentParser(description='Set device')

@@ -10,6 +10,7 @@ n_heads: 6
 
 data_preprocess:
   smiles_file: datasets/training_set.txt
+  validation_file: datasets/validation_set.txt
 
 data:
   num_train: 122039

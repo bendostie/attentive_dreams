@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-Example script demonstrating molecular transformations, using logP as target.
-The entire cycle - training and dreaming - is involved.
+Removes max after attention mechanism
 """
 
 import sys

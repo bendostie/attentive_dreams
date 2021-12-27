@@ -1,3 +1,4 @@
+'''tests that positional encoding works as expected'''
 import torch
 x = torch.Tensor([[0,1,0], [1,0,0], [0,0,1],[0,1,0]]).unsqueeze(0).unsqueeze(0)
 

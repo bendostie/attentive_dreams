@@ -1,3 +1,4 @@
+'''double checking tensor operations are as expected'''
 import torch
 
 first = torch.randn(64, 4, 300)
