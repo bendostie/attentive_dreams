@@ -1,7 +1,0 @@
-epoch: 100
-selfies: [N][=C][N][C][=C][Branch1_1][Ring2][O][Ring1][Branch1_1][N][=C][O][Ring1][Branch1_2][nop][nop][nop][nop][nop][nop]
-attention: tensor([0.3500, 0.1133, 0.1153, 0.0862, 0.1802, 0.1126, 0.1213, 0.1264, 0.0773,
-        0.0917, 0.0845, 0.0629, 0.0656, 0.0686, 0.0922, 0.0785, 0.0785, 0.0567,
-        0.0817, 0.1011, 0.0716])
-predicted: tensor([[-1.1736]], grad_fn=<AddmmBackward>)
-actual: tensor(0.2284)
